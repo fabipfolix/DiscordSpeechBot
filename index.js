@@ -313,10 +313,9 @@ function getHelpString() {
         out += _CMD_QUEUE + '\n';
         out += _CMD_CLEAR + '\n';
         out += '```';
-        
-        out += '**SETTINGS**: ';
+        out += '**SETTINGS**:\n';
         out += '```';
-        out += 'Current Language'+current_lang;
+        out += 'Current Language'+current_lang+'\n';
         out += '```';
     return out;
 }
