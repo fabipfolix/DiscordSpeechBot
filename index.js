@@ -143,6 +143,7 @@ function updateWitAIAppLang(appID, lang, cb) {
     })
 
     const req = https.request(options, (res) => {
+      current_lang=lang;
       res.setEncoding('utf8');
       let body = ''
       res.on('data', (chunk) => {
@@ -312,7 +313,7 @@ function getHelpString() {
         out += _CMD_QUEUE + '\n';
         out += _CMD_CLEAR + '\n';
         out += '```';
-        out += 'Aktuelle Sprache ändern mit !lang de/en';
+        out += 'Aktuelle Sprache: '+current_lang;
         out += '```';
     return out;
 }
