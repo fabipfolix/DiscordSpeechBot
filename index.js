@@ -283,16 +283,16 @@ discordClient.on('message', async (msg) => {
 function getHelpString() {
     let out = '**VOICE COMMANDS:**\n'
         out += '```'
-        out += 'music help\n'
-        out += 'music play [random, favorites, <genre> or query]\n'
-        out += 'music skip\n'
-        out += 'music pause/resume\n'
-        out += 'music shuffle\n'
+        out += 'music help/hilfe\n'
+        out += 'music play/spiele [random/zufall, favorites/favoriten, <genre> or query]\n'
+        out += 'music skip/nächstes\n'
+        out += 'music pause/resume/weiter\n'
+        out += 'music shuffle/zufall\n'
         out += 'music genres\n'
-        out += 'music set favorite\n'
-        out += 'music favorites\n'
-        out += 'music list\n'
-        out += 'music clear list\n';
+        out += 'music set favorite/setze favorit\n'
+        out += 'music favorites/favoriten\n'
+        out += 'music list/liste\n'
+        out += 'music clear list/leere schlange\n';
         out += '```'
 
         out += '**TEXT COMMANDS:**\n'
@@ -311,7 +311,9 @@ function getHelpString() {
         out += _CMD_GENRES + '\n'
         out += _CMD_QUEUE + '\n';
         out += _CMD_CLEAR + '\n';
-        out += '```'
+        out += '```';
+        out += 'Aktuelle Sprache ändern mit !lang de/en';
+        out += '```';
     return out;
 }
 
@@ -399,12 +401,15 @@ function process_commands_query(query, mapKey, userid) {
         const args = (m[2]||'').trim();
 
         switch(cmd) {
+            case 'hilfe':
             case 'help':
                 out = _CMD_HELP;
                 break;
+            case 'nächstes':
             case 'skip':
                 out = _CMD_SKIP;
                 break;
+            case 'zufall':
             case 'shuffle':
                 out = _CMD_SHUFFLE;
                 break;
@@ -414,36 +419,49 @@ function process_commands_query(query, mapKey, userid) {
             case 'pause':
                 out = _CMD_PAUSE;
                 break;
+            case 'weiter':
             case 'resume':
                 out = _CMD_RESUME;
                 break;
+            case 'leeren':
             case 'clear':
-                if (args == 'list')
+                if (args == 'list'|| args == 'liste' || args == 'schlange')
                     out = _CMD_CLEAR;
                 break;
+            case 'liste':
             case 'list':
                 out = _CMD_QUEUE;
                 break;
+            case 'hallo':
             case 'hello':
                 out = 'hello back =)'
                 break;
+            case 'favoriten':
             case 'favorites':
                 out = _CMD_FAVORITES;
                 break;
+            case 'setzte':
             case 'set':
                 switch (args) {
+                    case 'favorit':
+                    case 'favoriten':
                     case 'favorite':
                     case 'favorites':
                         out = _CMD_FAVORITE;
                         break;
                 }
                 break;
+            case 'spiele':
+            case 'spiel':
             case 'play':
             case 'player':
                 switch(args) {
+                    case 'zufall':
                     case 'random':
                         out = _CMD_RANDOM;
                         break;
+                    case 'favorit':
+                    case 'favoriten':
                     case 'favorite':
                     case 'favorites':
                         out = _CMD_PLAY + ' ' + 'favorites';
