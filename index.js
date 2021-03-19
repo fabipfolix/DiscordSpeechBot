@@ -313,7 +313,10 @@ function getHelpString() {
         out += _CMD_QUEUE + '\n';
         out += _CMD_CLEAR + '\n';
         out += '```';
-        out += 'Aktuelle Sprache: '+current_lang;
+        
+        out += '**SETTINGS**: ';
+        out += '```';
+        out += 'Current Language'+current_lang;
         out += '```';
     return out;
 }
