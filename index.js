@@ -143,7 +143,6 @@ function updateWitAIAppLang(appID, lang, cb) {
     })
 
     const req = https.request(options, (res) => {
-      current_lang=lang;
       res.setEncoding('utf8');
       let body = ''
       res.on('data', (chunk) => {
@@ -174,7 +173,8 @@ discordClient.on('ready', () => {
 })
 discordClient.login(DISCORD_TOK)
 
-const PREFIX = '!';
+const PREFIX = '$';
+//const _CMD_PREFIX      = PREFIX + 'prefix'
 const _CMD_HELP        = PREFIX + 'help';
 const _CMD_JOIN        = PREFIX + 'join';
 const _CMD_LEAVE       = PREFIX + 'leave';
@@ -1168,3 +1168,9 @@ async function spotify_tracks_from_playlist(spotifyurl) {
 //////////////////////////////////////////
 //////////////////////////////////////////
 //////////////////////////////////////////
+
+
+//////////////////////////////////////////
+///////////// TEXT TO SPEECH /////////////
+//////////////////////////////////////////
+
