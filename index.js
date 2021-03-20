@@ -1,3 +1,4 @@
+const defaultTextChannelId = "356541605848809472";
 //////////////////////////////////////////
 //////////////// LOGGING /////////////////
 //////////////////////////////////////////
@@ -421,102 +422,70 @@ function speak_impl(voice_Connection, mapKey) {
 }
 
 function process_commands_query(query, mapKey, userid) {
-    if (!query || !query.length)
-        return;
+    console.log("processing command...");
+
 
     let out = null;
-    let intent = query.intent[0].name;
+    
+    let intent = query.intents[0].name;
+    
+    switch(intent) {
+        case 'music_help':
+            out = _CMD_HELP;
+            break;
+        case 'music_skip':
+            out = _CMD_SKIP;
+            break;
+        case 'music_shuffle':
+            out = _CMD_SHUFFLE;
+            break;
+        case 'music_genres':
+            out = _CMD_GENRES;
+            break;
 
-    const regex = /^musik ([a-zA-Z]+)(.+?)?$/;
-    const m = query.text.toLowerCase().match(regex); 
-    if (m && m.length) {
-        const cmd = (m[1]||'').trim();
-        const args = (m[2]||'').trim();
-
-        console.log("Cmd: " +cmd+" args: "+args)
-        switch(cmd) {
-            case 'hilfe':
-            case 'help':
-                out = _CMD_HELP;
-                break;
-            case 'nächstes':
-            case 'skip':
-                out = _CMD_SKIP;
-                break;
-            case 'zufall':
-            case 'shuffle':
-                out = _CMD_SHUFFLE;
-                break;
-            case 'genres':
-                out = _CMD_GENRES;
-                break;
-            case 'stop':
-            case 'stopp':
-            case 'pause':
-                out = _CMD_PAUSE;
-                break;
-            case 'weiter':
-            case 'resume':
-                out = _CMD_RESUME;
-                break;
-            case 'leeren':
-            case 'clear':
-                if (args == 'list'|| args == 'liste' || args == 'schlange')
-                    out = _CMD_CLEAR;
-                break;
-            case 'liste':
-            case 'list':
-                out = _CMD_QUEUE;
-                break;
-            case 'hallo':
-            case 'hello':
-                out = 'hello back =)'
-                break;
-            case 'favoriten':
-            case 'favorites':
-                out = _CMD_FAVORITES;
-                break;
-            case 'setzte':
-            case 'set':
-                switch (args) {
-                    case 'favorit':
-                    case 'favoriten':
-                    case 'favorite':
-                    case 'favorites':
-                        out = _CMD_FAVORITE;
-                        break;
+        case 'music_pause':
+            out = _CMD_PAUSE;
+            break;
+        case 'music_resume':
+            out = _CMD_RESUME;
+            break;
+        case 'music_clear':
+            out = _CMD_CLEAR;
+            break;
+        case 'music_queue':
+            out = _CMD_QUEUE;
+            break;
+        case 'music_hello':
+            out = 'hello back =)'
+            break;
+        case 'music_favorites':
+            out = _CMD_FAVORITES;
+            break;
+        case 'music_setFavorite':
+            out = _CMD_FAVORITE;
+            break;
+        case 'music_play_random':
+            out = _CMD_RANDOM;
+            break;
+        case 'music_play_favorites':
+            out = _CMD_PLAY + ' ' + 'favorites';
+            break;
+        case 'music_play':
+            let args = query.entities['song_query:song_query'][0].value;
+            out = _CMD_PLAY + ' ' + args;
+            break;
+        case 'music_play_genres':
+            for (let k of Object.keys(GENRES)) {
+                if (GENRES[k].includes(args)) {
+                    out = _CMD_GENRE + ' ' + k;
                 }
-                break;
-            case 'spiele':
-            case 'spiel':
-            case 'play':
-            case 'player':
-                switch(args) {
-                    case 'zufall':
-                    case 'random':
-                        out = _CMD_RANDOM;
-                        break;
-                    case 'favorit':
-                    case 'favoriten':
-                    case 'favorite':
-                    case 'favorites':
-                        out = _CMD_PLAY + ' ' + 'favorites';
-                        break;
-                    default:
-                        for (let k of Object.keys(GENRES)) {
-                            if (GENRES[k].includes(args)) {
-                                out = _CMD_GENRE + ' ' + k;
-                            }
-                        }
-                        if (out == null) {
-                            out = _CMD_PLAY + ' ' + args;
-                        }
-                }
-                break;
+            }
+            break;
         }
+
         if (out == null)
             out = '<bad command: ' + query + '>';
-    }
+    //}
     if (out != null && out.length) {
         // out = '<@' + userid + '>, ' + out;
         console.log('text_Channel out: ' + out)
@@ -956,7 +925,8 @@ async function transcribe_witai(buffer) {
         const output = await extractSpeechIntent(WITAPIKEY, stream, contenttype)
         witAI_lastcallTS = Math.floor(new Date());
         console.log(output)
-        console.log("intent: "+output.intents[0].name)
+    
+
         stream.destroy()
         /*
         if (output && '_text' in output && output._text.length)
@@ -1214,28 +1184,23 @@ async function spotify_tracks_from_playlist(spotifyurl) {
 ///////////// TEXT TO SPEECH /////////////
 //////////////////////////////////////////
 discordClient.on('voiceStateUpdate', async (oldState, newState) => {
-    console.log("VoiceStateUpdate Event");
+    if(newState.member.id=="822512777045999667"){ //ID of the Bot
+        return;
+    }
 
     let newChannel = newState.channel;
     let oldChannel = oldState.channel;
-    
-    let join;
+
+    let type = getVoiceStateChangeType(oldState,newState); //Left/Join/Move/(Un)Mute/(Un)Deaf
+    console.log("VoiceStateUpdate: " +newState.member.displayName +" : " +type);
+
     let mapKey=newState.member.voice.guild.id;
-
-    if(oldChannel === undefined && newChannel !== undefined) {
-        // User Joins a voice channel
-        join=true;
-
-    } else if(newChannel === undefined){
-        // User leaves a voice channel
-        join=false;
-    }
 
     
     //Only follow VIP if not in a channel
     if (!guildMap.has(mapKey)){
         if(newState.member.roles.hoist.id=="684027735496196138")
-            await connect('356541605848809472',newState.member.voice.channelID,mapKey);//musicbot textchannelid, 
+            await connect(defaultTextChannelId,newState.member.voice.channelID,mapKey);//musicbot textchannelid, 
         else
             return;
     }
@@ -1244,21 +1209,82 @@ discordClient.on('voiceStateUpdate', async (oldState, newState) => {
     let val = guildMap.get(mapKey);
     //Build String
     let out;
-    if(join){
-            out = "Hallo "+newState.member.nickname;
-    } else{
-        out = "Tschüss "+ oldState.member.nickname;
+
+    switch(type){
+        case 'join':
+            out = "Hallo "+newState.member.displayName;
+            break;
+        case 'left':
+            out = "Tschüss "+ oldState.member.displayName;
+            if(val.voice_Channel.members.size <= 1)
+            if (val.voice_Channel) val.voice_Channel.leave()
+            if (val.voice_Connection) val.voice_Connection.disconnect()
+            if (val.musicYTStream) val.musicYTStream.destroy()
+            console.log("Left Channel.")
+            break;
+        case 'move':
+            //TTS 
+            if(oldChannel.id == val.voice_Channel.id){
+                out = "Tschüss "+ oldState.member.displayName;
+
+                //Follow Verhalten
+                if(val.voice_Channel.members.size <= 1) { //Nur noch der Bot
+                    await connect(defaultTextChannelId,newChannel.id, mapKey);
+                    return;
+                }
+
+            } else if(newChannel.id == val.voice_Channel.id){
+                out = "Hallo "+newState.member.displayName;
+            } else{
+                return; //in anderem Channel
+            }
+            
+            
+
+
+            break;
+        default:
+            return; //mute/deaf-Event
     }
-    let filename = out.toLowerCase().replace(' ',"")+".mp3";
+    
+    
+    let filename = "./temp/"+out.toLowerCase().replace(' ',"")+".mp3";
     
     //Call Google TTS API
     await synthesizeText(out,filename); 
     //play sound
-    val.voice_Connection.play(filename, { volume: 0.5 });
+    val.voice_Connection.play(filename, { volume: 2 });
     
     
-
 });
+
+function getVoiceStateChangeType(oldState, newState){
+    let newChannel = newState.channel;
+    let oldChannel = oldState.channel;
+
+    if(oldChannel === null){
+        return "join";
+    } else if(newChannel === null){
+        return "left";
+    } else if(oldChannel.id!=newChannel.id){
+        return "move";
+    } else if(newChannel.id == oldChannel.id){
+        if (oldState.deaf!=newState.deaf){
+            if(newState.deaf){
+                return "deaf";
+            } else{
+                return "undeaf";
+            }
+        } else if (oldState.mute!=newState.mute){
+            if(newState.mute){
+                return "mute";
+            } else{
+                return "unmute";
+            }
+        }  
+    }
+
+}
 
 async function synthesizeText(text, outputFile) {
     // [START tts_synthesize_text]
@@ -1271,7 +1297,11 @@ async function synthesizeText(text, outputFile) {
   
     const request = {
       input: {text: text},
-      voice: {languageCode: 'de-DE', ssmlGender: 'MALE'},
+      voice: {
+            languageCode: 'de-DE',
+            ssmlGender: 'MALE',
+            name: 'de-DE-Wavenet-F'
+        },
       audioConfig: {audioEncoding: 'MP3'},
     };
     const [response] = await client.synthesizeSpeech(request);
@@ -1279,4 +1309,4 @@ async function synthesizeText(text, outputFile) {
     await writeFile(outputFile, response.audioContent, 'binary');
     console.log(`Audio content written to file: ${outputFile}`);
     // [END tts_synthesize_text]
-  }
+}
