@@ -213,20 +213,25 @@ const GENRES = {
 
 const guildMap = new Map();
 
+//Message Event
 discordClient.on('message', async (msg) => {
     try {
         if (!('guild' in msg) || !msg.guild) return; // prevent private messages to bot
-        const mapKey = msg.guild.id;
-        if (msg.content.trim().toLowerCase() == _CMD_JOIN) {
-            if (!msg.member.voice.channelID) {
+        
+        const mapKey = msg.guild.id; //GuildId
+        //!Join
+        if (msg.content.trim().toLowerCase() == _CMD_JOIN) { 
+            if (!msg.member.voice.channelID) { //Member in keinem Channel
                 msg.reply('Error: please join a voice channel first.')
             } else {
                 if (!guildMap.has(mapKey))
-                    await connect(msg, mapKey)
+                    await connect(msg, mapKey) //Bot ruft connect mit aktueller Gilde und Msg auf
                 else
                     msg.reply('Already connected')
             }
-        } else if (msg.content.trim().toLowerCase() == _CMD_LEAVE) {
+
+        //!Leave
+        } else if (msg.content.trim().toLowerCase() == _CMD_LEAVE) { 
             if (guildMap.has(mapKey)) {
                 let val = guildMap.get(mapKey);
                 if (val.voice_Channel) val.voice_Channel.leave()
@@ -347,7 +352,34 @@ async function connect(msg, mapKey) {
         throw e;
     }
 }
+async function connect(textChannelId, voiceChannelId, mapKey) {
+    try {
+        let voice_Channel = await discordClient.channels.fetch(voiceChannelId);
+        let text_Channel = await discordClient.channels.fetch(textChannelId);
+        let voice_Connection = await voice_Channel.join();
+        voice_Connection.play('sound.mp3', { volume: 0.5 });
+        guildMap.set(mapKey, {
+            'text_Channel': text_Channel,
+            'voice_Channel': voice_Channel,
+            'voice_Connection': voice_Connection,
+            'musicQueue': [],
+            'musicDispatcher': null,
+            'musicYTStream': null,
+            'currentPlayingTitle': null,
+            'currentPlayingQuery': null,
+            'debug': false,
+        });
+        speak_impl(voice_Connection, mapKey)
+        voice_Connection.on('disconnect', async(e) => {
+            if (e) console.log(e);
+            guildMap.delete(mapKey);
+        })
 
+    } catch (e) {
+        console.log('connect: ' + e)
+        throw e;
+    }
+}
 function speak_impl(voice_Connection, mapKey) {
     voice_Connection.on('speaking', async (user, speaking) => {
         if (speaking.bitfield == 0 || user.bot) {
@@ -376,6 +408,7 @@ function speak_impl(voice_Connection, mapKey) {
             try {
                 let new_buffer = await convert_audio(buffer)
                 let out = await transcribe(new_buffer);
+
                 if (out != null)
                     process_commands_query(out, mapKey, user.id);
             } catch (e) {
@@ -392,13 +425,15 @@ function process_commands_query(query, mapKey, userid) {
         return;
 
     let out = null;
+    let intent = query.intent[0].name;
 
-    const regex = /^music ([a-zA-Z]+)(.+?)?$/;
-    const m = query.toLowerCase().match(regex);
+    const regex = /^musik ([a-zA-Z]+)(.+?)?$/;
+    const m = query.text.toLowerCase().match(regex); 
     if (m && m.length) {
         const cmd = (m[1]||'').trim();
         const args = (m[2]||'').trim();
 
+        console.log("Cmd: " +cmd+" args: "+args)
         switch(cmd) {
             case 'hilfe':
             case 'help':
@@ -415,6 +450,8 @@ function process_commands_query(query, mapKey, userid) {
             case 'genres':
                 out = _CMD_GENRES;
                 break;
+            case 'stop':
+            case 'stopp':
             case 'pause':
                 out = _CMD_PAUSE;
                 break;
@@ -888,7 +925,7 @@ function shuffleMusic(mapKey, cbok, cberr) {
 //////////////// SPEECH //////////////////
 //////////////////////////////////////////
 async function transcribe(buffer) {
-
+  console.log("-----------------1");
   return transcribe_witai(buffer)
   // return transcribe_gspeech(buffer)
 }
@@ -919,11 +956,14 @@ async function transcribe_witai(buffer) {
         const output = await extractSpeechIntent(WITAPIKEY, stream, contenttype)
         witAI_lastcallTS = Math.floor(new Date());
         console.log(output)
+        console.log("intent: "+output.intents[0].name)
         stream.destroy()
+        /*
         if (output && '_text' in output && output._text.length)
             return output._text
         if (output && 'text' in output && output.text.length)
             return output.text
+            */
         return output;
     } catch (e) { console.log('transcribe_witai 851:' + e); console.log(e) }
 }
@@ -1173,4 +1213,70 @@ async function spotify_tracks_from_playlist(spotifyurl) {
 //////////////////////////////////////////
 ///////////// TEXT TO SPEECH /////////////
 //////////////////////////////////////////
+discordClient.on('voiceStateUpdate', async (oldState, newState) => {
+    console.log("VoiceStateUpdate Event");
 
+    let newChannel = newState.channel;
+    let oldChannel = oldState.channel;
+    
+    let join;
+    let mapKey=newState.member.voice.guild.id;
+
+    if(oldChannel === undefined && newChannel !== undefined) {
+        // User Joins a voice channel
+        join=true;
+
+    } else if(newChannel === undefined){
+        // User leaves a voice channel
+        join=false;
+    }
+
+    
+    //Only follow VIP if not in a channel
+    if (!guildMap.has(mapKey)){
+        if(newState.member.roles.hoist.id=="684027735496196138")
+            await connect('356541605848809472',newState.member.voice.channelID,mapKey);//musicbot textchannelid, 
+        else
+            return;
+    }
+        
+    //speichert 
+    let val = guildMap.get(mapKey);
+    //Build String
+    let out;
+    if(join){
+            out = "Hallo "+newState.member.nickname;
+    } else{
+        out = "Tschüss "+ oldState.member.nickname;
+    }
+    let filename = out.toLowerCase().replace(' ',"")+".mp3";
+    
+    //Call Google TTS API
+    await synthesizeText(out,filename); 
+    //play sound
+    val.voice_Connection.play(filename, { volume: 0.5 });
+    
+    
+
+});
+
+async function synthesizeText(text, outputFile) {
+    // [START tts_synthesize_text]
+    const textToSpeech = require('@google-cloud/text-to-speech');
+    const fs = require('fs');
+    const util = require('util');
+  
+    const client = new textToSpeech.TextToSpeechClient();
+  
+  
+    const request = {
+      input: {text: text},
+      voice: {languageCode: 'de-DE', ssmlGender: 'MALE'},
+      audioConfig: {audioEncoding: 'MP3'},
+    };
+    const [response] = await client.synthesizeSpeech(request);
+    const writeFile = util.promisify(fs.writeFile);
+    await writeFile(outputFile, response.audioContent, 'binary');
+    console.log(`Audio content written to file: ${outputFile}`);
+    // [END tts_synthesize_text]
+  }
