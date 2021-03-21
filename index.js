@@ -1,4 +1,10 @@
+//Set Environmental Variable: $env:GOOGLE_APPLICATION_CREDENTIALS="google-credentials.json"
+
 const defaultTextChannelId = "356541605848809472";
+const vipRoleId = "684027735496196138";
+const botId = "822512777045999667";
+
+let volume=100;
 //////////////////////////////////////////
 //////////////// LOGGING /////////////////
 //////////////////////////////////////////
@@ -61,6 +67,29 @@ async function convert_audio(input) {
         console.log('convert_audio: ' + e)
         throw e;
     }
+}
+
+/**
+ * Converts a german written number to digits
+ */
+function convertToDigits(input){
+    
+    fs.readFile("zahlen.json", (error, content) => {
+        if(!error){
+        const numberMap = JSON.parse(content); 
+
+        if(numberMap[input]!=undefined){
+            console.log(input +" is the number "+numberMap[input]);
+            return numberMap[input];
+        }else
+            return 50;
+        } else {
+            console.log("Error at reading File.");
+            console.log(error);
+        }
+        
+    });
+
 }
 //////////////////////////////////////////
 //////////////////////////////////////////
@@ -175,7 +204,9 @@ discordClient.on('ready', () => {
 discordClient.login(DISCORD_TOK)
 
 const PREFIX = '$';
-//const _CMD_PREFIX      = PREFIX + 'prefix'
+const _CMD_VOLUME_UP   = PREFIX + 'volume+';
+const _CMD_VOLUME_DOWN = PREFIX + 'volume-';
+const _CMD_VOLUME      = PREFIX + 'volume';
 const _CMD_HELP        = PREFIX + 'help';
 const _CMD_JOIN        = PREFIX + 'join';
 const _CMD_LEAVE       = PREFIX + 'leave';
@@ -195,7 +226,7 @@ const _CMD_QUEUE       = PREFIX + 'list';
 const _CMD_DEBUG       = PREFIX + 'debug';
 const _CMD_TEST        = PREFIX + 'hello';
 const _CMD_LANG        = PREFIX + 'lang';
-const PLAY_CMDS = [_CMD_PLAY, _CMD_PAUSE, _CMD_RESUME, _CMD_SHUFFLE, _CMD_SKIP, _CMD_GENRE, _CMD_GENRES, _CMD_RANDOM, _CMD_CLEAR, _CMD_QUEUE, _CMD_FAVORITE, _CMD_FAVORITES, _CMD_UNFAVORITE];
+const PLAY_CMDS = [_CMD_PLAY, _CMD_PAUSE, _CMD_RESUME, _CMD_SHUFFLE, _CMD_SKIP, _CMD_GENRE, _CMD_GENRES, _CMD_RANDOM, _CMD_CLEAR, _CMD_QUEUE, _CMD_FAVORITE, _CMD_FAVORITES, _CMD_UNFAVORITE, _CMD_VOLUME, _CMD_VOLUME_UP,  _CMD_VOLUME_DOWN];
 
 const EMOJI_GREEN_CIRCLE = '🟢'
 const EMOJI_RED_CIRCLE = '🔴'
@@ -244,10 +275,11 @@ discordClient.on('message', async (msg) => {
                 msg.reply("Cannot leave because not connected.")
             }
         }
-        else if ( PLAY_CMDS.indexOf( msg.content.trim().toLowerCase().split('\n')[0].split(' ')[0] ) >= 0 ) {
+        else if ( PLAY_CMDS.indexOf( msg.content.trim().toLowerCase().split('\n')[0].split(' ')[0] ) >= 0 ) { //erste Zeile der Nachricht und text vor erstem ' ' -> CMD 
             if (!msg.member.voice.channelID) {
                 msg.reply('Error: please join a voice channel first.')
             } else {
+                //connect if not in channel
                 if (!guildMap.has(mapKey))
                     await connect(msg, mapKey)
                 music_message(msg, mapKey);
@@ -286,20 +318,25 @@ discordClient.on('message', async (msg) => {
         msg.reply('Error#180: Something went wrong, try again or contact the developers if this keeps happening.');
     }
 })
-
+/**
+ * Builds help String containing information for all commands.
+ * 
+ * @returns string containing command information
+ */
 function getHelpString() {
     let out = '**VOICE COMMANDS:**\n'
         out += '```'
-        out += 'music help/hilfe\n'
-        out += 'music play/spiele [random/zufall, favorites/favoriten, <genre> or query]\n'
-        out += 'music skip/nächstes\n'
-        out += 'music pause/resume/weiter\n'
-        out += 'music shuffle/zufall\n'
-        out += 'music genres\n'
-        out += 'music set favorite/setze favorit\n'
-        out += 'music favorites/favoriten\n'
-        out += 'music list/liste\n'
-        out += 'music clear list/leere schlange\n';
+        out += 'musik hilfe\n'
+        out += 'musik spiele [random/zufall, favorites/favoriten, <genre> or query]\n'
+        out += 'musik skip/nächstes\n'
+        out += 'musik stop/pause\n'
+        out += 'musik resume/weiter\n'
+        out += 'musik shuffle/zufall\n'
+        out += 'musik genres\n'
+        out += 'musik als favorit hinzufügen\n'
+        out += 'musik favoriten\n'
+        out += 'musik liste/schlange\n'
+        out += 'musik leere schlange\n';
         out += '```'
 
         out += '**TEXT COMMANDS:**\n'
@@ -322,14 +359,25 @@ function getHelpString() {
     return out;
 }
 
+/**
+ * Connects the Bot to the voicechannel of the message author.
+ * 
+ * @param {} msg text message that wants the bot to join
+ * @param {*} mapKey guildId
+ * @returns 
+ */
 async function connect(msg, mapKey) {
     try {
+        //Fetch VoiceChannel of the message author
         let voice_Channel = await discordClient.channels.fetch(msg.member.voice.channelID);
         if (!voice_Channel) return msg.reply("Error: The voice channel does not exist!");
         let text_Channel = await discordClient.channels.fetch(msg.channel.id);
         if (!text_Channel) return msg.reply("Error: The text channel does not exist!");
+
+        //Join the Voice Channel
         let voice_Connection = await voice_Channel.join();
-        voice_Connection.play('sound.mp3', { volume: 0.5 });
+        voice_Connection.play('sound.mp3', { volume: 0.01 * volume });
+        //save session information
         guildMap.set(mapKey, {
             'text_Channel': text_Channel,
             'voice_Channel': voice_Channel,
@@ -341,7 +389,10 @@ async function connect(msg, mapKey) {
             'currentPlayingQuery': null,
             'debug': false,
         });
-        speak_impl(voice_Connection, mapKey)
+
+        speak_impl(voice_Connection, mapKey) //Audio Handling
+        
+        //End of session
         voice_Connection.on('disconnect', async(e) => {
             if (e) console.log(e);
             guildMap.delete(mapKey);
@@ -353,12 +404,24 @@ async function connect(msg, mapKey) {
         throw e;
     }
 }
+/**
+ * Connects the Bot to the given voicechannel. 
+ * 
+ * @param {*} textChannelId id of the text channel for feedback
+ * @param {*} voiceChannelId id of voice channel to connect to
+ * @param {*} mapKey guildid
+ */
 async function connect(textChannelId, voiceChannelId, mapKey) {
     try {
+        //Fetch VoiceChannel of the message author
         let voice_Channel = await discordClient.channels.fetch(voiceChannelId);
         let text_Channel = await discordClient.channels.fetch(textChannelId);
+
+        //Join Channel
         let voice_Connection = await voice_Channel.join();
-        voice_Connection.play('sound.mp3', { volume: 0.5 });
+        voice_Connection.play('sound.mp3', { volume: 0.005*volume });
+
+        //save session information
         guildMap.set(mapKey, {
             'text_Channel': text_Channel,
             'voice_Channel': voice_Channel,
@@ -370,7 +433,10 @@ async function connect(textChannelId, voiceChannelId, mapKey) {
             'currentPlayingQuery': null,
             'debug': false,
         });
-        speak_impl(voice_Connection, mapKey)
+
+        speak_impl(voice_Connection, mapKey) //Audio Handling
+
+        //End of session
         voice_Connection.on('disconnect', async(e) => {
             if (e) console.log(e);
             guildMap.delete(mapKey);
@@ -381,6 +447,12 @@ async function connect(textChannelId, voiceChannelId, mapKey) {
         throw e;
     }
 }
+/**
+ * Handles the audio listening and transcription with WitAI
+ * 
+ * @param {*} voice_Connection current Voice Connection object
+ * @param {*} mapKey guildid
+ */
 function speak_impl(voice_Connection, mapKey) {
     voice_Connection.on('speaking', async (user, speaking) => {
         if (speaking.bitfield == 0 || user.bot) {
@@ -421,14 +493,20 @@ function speak_impl(voice_Connection, mapKey) {
     })
 }
 
+/**
+ * Processes the voice commands to chat commands and invokes them
+ *  
+ * @param {*} query witai response
+ * @param {*} mapKey guildid
+ * @param {*} userid user that initiated the command
+ */
 function process_commands_query(query, mapKey, userid) {
-    console.log("processing command...");
-
 
     let out = null;
     
-    let intent = query.intents[0].name;
-    
+    let intent = query.intents[0].name; 
+    let args;
+    //Writes the Command in the Chat
     switch(intent) {
         case 'music_help':
             out = _CMD_HELP;
@@ -471,7 +549,7 @@ function process_commands_query(query, mapKey, userid) {
             out = _CMD_PLAY + ' ' + 'favorites';
             break;
         case 'music_play':
-            let args = query.entities['song_query:song_query'][0].value;
+            args = query.entities['song_query:song_query'][0].value;
             out = _CMD_PLAY + ' ' + args;
             break;
         case 'music_play_genres':
@@ -480,6 +558,21 @@ function process_commands_query(query, mapKey, userid) {
                     out = _CMD_GENRE + ' ' + k;
                 }
             }
+            break;
+        case 'music_volume_up':
+            out = _CMD_VOLUME_UP;
+            break;
+        case 'music_volume_down':
+            out = _CMD_VOLUME_DOWN;
+            break;
+        case 'music_volume':
+            let value;
+            if(query.entities["wit$number:number"] !== undefined){
+                value = query.entities['wit$number:number'][0].value;
+            } else {
+                return;
+            }
+            out = _CMD_VOLUME +" "+ value;
             break;
         }
 
@@ -493,7 +586,11 @@ function process_commands_query(query, mapKey, userid) {
         val.text_Channel.send(out)
     }
 }
-
+/**
+ * 
+ * @param {*} message 
+ * @param {*} mapKey 
+ */
 async function music_message(message, mapKey) {
     let replymsgs = [];
     const messes = message.content.split('\n');
@@ -666,7 +763,16 @@ async function music_message(message, mapKey) {
                 if (msg && msg.length) message.channel.send(msg);
             })
 
-        } 
+        } else if (args[0] == _CMD_VOLUME_UP) {
+            volume += 10;
+
+        } else if (args[0] == _CMD_VOLUME_DOWN) {
+            volume -= 10;
+
+        } else if (args[0] == _CMD_VOLUME) {
+            const value = args.slice(1,2)[0].trim(); //erstes Argument
+            volume = value;
+        }
 
     }
     
@@ -1089,11 +1195,19 @@ const spotifyClient = new Spotify({
     id: SPOTIFY_TOKEN_ID,
     secret: SPOTIFY_TOKEN_SECRET
 });
-
+/**
+ * Checks if a url is a spotify url
+ * @param {String} str an url
+ * @returns true if is a spotify url
+ */
 function isSpotify(str) {
     return str.toLowerCase().indexOf('spotify.com') > -1;
 }
-
+/**
+ * Extracts the spotify trackname with title and artist
+ * @param {*} item spotify track
+ * @returns String with trackname
+ */
 function spotify_extract_trackname(item) {
     if ('artists' in item) {
         let name = '';
@@ -1108,7 +1222,10 @@ function spotify_extract_trackname(item) {
         return spotify_extract_trackname(item.track);
     }
 }
-
+/**
+ * Fetches Spotifys new releases as array of titles
+ * @returns array of song titles
+ */
 async function spotify_new_releases() {
 
     let arr = await spotifyClient
@@ -1129,7 +1246,12 @@ async function spotify_new_releases() {
 
     return arr;
 }
-
+/**
+ * Fetches the spotify recommendations for a given genre
+ * 
+ * @param {String} genre spotify genre
+ * @returns array of song names
+ */
 async function spotify_recommended(genre) {
 
     let arr = await spotifyClient
@@ -1150,7 +1272,12 @@ async function spotify_recommended(genre) {
 
     return arr;
 }
-
+/**
+ * Transforms a spotify playlist link to an array of titles of the songs
+ * 
+ * @param {String} spotifyurl url of spotify playlist
+ * @returns array with song names
+ */
 async function spotify_tracks_from_playlist(spotifyurl) {
 
     const regex = /\/playlist\/(.+?)(\?.+)?$/;
@@ -1183,89 +1310,119 @@ async function spotify_tracks_from_playlist(spotifyurl) {
 //////////////////////////////////////////
 ///////////// TEXT TO SPEECH /////////////
 //////////////////////////////////////////
+
+/**
+ * VoiceStateUpdateListener.
+ * 
+ * Says Hello/Bye to every user joining or leaving the channel.
+ * Follows the last member in channel.
+ * Leaves the channel if the last member left.
+ * Joins VIPs if they join something.
+ */
 discordClient.on('voiceStateUpdate', async (oldState, newState) => {
-    if(newState.member.id=="822512777045999667"){ //ID of the Bot
+    if(newState.member.id==botId){ //ID of the Bot
         return;
     }
 
     let newChannel = newState.channel;
     let oldChannel = oldState.channel;
 
-    let type = getVoiceStateChangeType(oldState,newState); //Left/Join/Move/(Un)Mute/(Un)Deaf
+    //Fetches Type of Event
+    let type = getVoiceStateUpdateType(oldState,newState); 
     console.log("VoiceStateUpdate: " +newState.member.displayName +" : " +type);
 
     let mapKey=newState.member.voice.guild.id;
 
     
-    //Only follow VIP if not in a channel
+    //follow VIPs if not in a channel
     if (!guildMap.has(mapKey)){
-        if(newState.member.roles.hoist.id=="684027735496196138")
+        if(newState.member.roles.hoist.id==vipRoleId)
             await connect(defaultTextChannelId,newState.member.voice.channelID,mapKey);//musicbot textchannelid, 
         else
             return;
     }
-        
-    //speichert 
+    //Voice Information 
     let val = guildMap.get(mapKey);
+
+    
+    if(guildMap.get(mapKey)["currentPlayingTitle"] !== null){
+        console.log("Ignoring Event because music is playing");
+        return;
+    }
+
     //Build String
     let out;
-
     switch(type){
         case 'join':
+            //Cancel if user joined another channel
+            if(newChannel!=val.voice_Channel)
+                return;
+
             out = "Hallo "+newState.member.displayName;
             break;
-        case 'left':
+        case 'leave':
+            //Cancel if user joined another channel
+            if(oldChannel!=val.voice_Channel)
+                return;
+
             out = "Tschüss "+ oldState.member.displayName;
-            if(val.voice_Channel.members.size <= 1)
-            if (val.voice_Channel) val.voice_Channel.leave()
-            if (val.voice_Connection) val.voice_Connection.disconnect()
-            if (val.musicYTStream) val.musicYTStream.destroy()
-            console.log("Left Channel.")
+            //Leave channel if empty
+            if(val.voice_Channel.members.size <= 1){
+                if (val.voice_Channel) val.voice_Channel.leave();
+                if (val.voice_Connection) val.voice_Connection.disconnect();
+                if (val.musicYTStream) val.musicYTStream.destroy();
+                console.log("Left Channel.");
+            }
             break;
         case 'move':
             //TTS 
             if(oldChannel.id == val.voice_Channel.id){
+                //Left the bots channel
                 out = "Tschüss "+ oldState.member.displayName;
 
-                //Follow Verhalten
+                //Follow last Member in Channel
                 if(val.voice_Channel.members.size <= 1) { //Nur noch der Bot
                     await connect(defaultTextChannelId,newChannel.id, mapKey);
                     return;
                 }
 
             } else if(newChannel.id == val.voice_Channel.id){
+                //Moved in the bots channel
                 out = "Hallo "+newState.member.displayName;
             } else{
-                return; //in anderem Channel
+                return; //in different channels
             }
-            
-            
-
-
             break;
         default:
             return; //mute/deaf-Event
     }
-    
     
     let filename = "./temp/"+out.toLowerCase().replace(' ',"")+".mp3";
     
     //Call Google TTS API
     await synthesizeText(out,filename); 
     //play sound
-    val.voice_Connection.play(filename, { volume: 2 });
+    val.voice_Connection.play(filename, { volume: 0.01*volume*2 });
     
     
 });
 
-function getVoiceStateChangeType(oldState, newState){
+/**
+ * Determines type of given VoiceStateUpdate.
+ * Possible types are "join", "leave", "move", "mute", "unmute", "deaf", "undeaf"
+ * 
+ * @param {*} oldState Parameter of VoiceStateUpdateEvent
+ * @param {*} newState Parameter of VoiceStateUpdateEvent
+ * @returns String that contains type
+ */
+function getVoiceStateUpdateType(oldState, newState){
     let newChannel = newState.channel;
     let oldChannel = oldState.channel;
 
     if(oldChannel === null){
         return "join";
     } else if(newChannel === null){
-        return "left";
+        return "leave";
     } else if(oldChannel.id!=newChannel.id){
         return "move";
     } else if(newChannel.id == oldChannel.id){
@@ -1285,16 +1442,22 @@ function getVoiceStateChangeType(oldState, newState){
     }
 
 }
-
+/**
+ * Uses Google Cloud Text To Speech API to synthesize Text to Speech and save it as the given file.
+ * 
+ * Authentication at GCP automatically with Env variable: GOOGLE_APPLICATION_CREDENTIALS and key
+ * 
+ * @param {} text String of Text to synthesize
+ * @param {*} outputFile Path of the output file
+ */
 async function synthesizeText(text, outputFile) {
-    // [START tts_synthesize_text]
     const textToSpeech = require('@google-cloud/text-to-speech');
     const fs = require('fs');
     const util = require('util');
   
     const client = new textToSpeech.TextToSpeechClient();
   
-  
+    //Config of Request
     const request = {
       input: {text: text},
       voice: {
@@ -1304,9 +1467,9 @@ async function synthesizeText(text, outputFile) {
         },
       audioConfig: {audioEncoding: 'MP3'},
     };
+    //Synthesize Speech
     const [response] = await client.synthesizeSpeech(request);
+    //write File
     const writeFile = util.promisify(fs.writeFile);
     await writeFile(outputFile, response.audioContent, 'binary');
-    console.log(`Audio content written to file: ${outputFile}`);
-    // [END tts_synthesize_text]
 }
